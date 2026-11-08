@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>四位數除以一位數：平分與換幣概念 - CRA 特教版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;800;900&display=swap');
+        
+        * {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            user-select: none;
+            background-color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* CRA 四位數位值色彩規範：千位藍(長方形)、百位紅(長方形)、十位紅(圓形)、個位藍(圓形)、除數黃 */
+        .color-thousands { color: #2563eb; }
+        .bg-thousands { background-color: #2563eb; }
+        .border-thousands { border-color: #1d4ed8; }
+
+        .color-hundreds { color: #dc2626; }
+        .bg-hundreds { background-color: #dc2626; }
+        .border-hundreds { border-color: #b91c1c; }
+
+        .color-tens { color: #ef4444; }
+        .bg-tens { background-color: #ef4444; }
+        .border-tens { border-color: #ef4444; }
+
+        .color-ones { color: #3b82f6; }
+        .bg-ones { background-color: #3b82f6; }
+        .border-ones { border-color: #3b82f6; }
+
+        .color-divisor { color: #d97706; }
+        .bg-divisor { background-color: #f59e0b; }
+
+        /* 拖拉錢幣動態 */
+        .coin-node {
+            touch-action: none;
+            cursor: grab;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .coin-node:active {
+            cursor: grabbing;
+            transform: scale(1.15);
+            z-index: 100;
+        }
+        .coin-dragging {
+            position: fixed !important;
+            pointer-events: none !important;
+            z-index: 9999 !important;
+            opacity: 0.95;
+            transform: scale(1.25);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.25);
+        }
+
+        /* 放置區感應高亮 */
+        .drop-target {
+            transition: all 0.2s ease;
+        }
+        .drop-target-hover {
+            background-color: #fef3c7 !important;
+            border-color: #f59e0b !important;
+            transform: scale(1.02);
+        }
+
+        /* 特教線條規範：等分分割線線條 #94a3b8 */
+        .divider-line {
+            border-color: #94a3b8 !important;
+        }
+
+        .modal-bounce {
+            animation: bounceIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes bounceIn {
+            0% { opacity: 0; transform: scale(0.85); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* 滾動條美化 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body class="p-2 sm:p-4 text-slate-800 flex flex-col h-screen">
+
+    <div id="app" class="max-w-[1700px] w-full mx-auto flex-1 flex flex-col gap-3 h-full overflow-hidden">
+        
+        <!-- 1. 頂部模式與算式區（CRA 抽象同步表徵） -->
+        <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-2.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 shrink-0">
+            <!-- Problem Title & Math Sentence Sync -->
+            <div class="flex items-center gap-3 sm:gap-6 flex-wrap">
+                <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                    <i data-lucide="calculator" class="text-indigo-600" size="24"></i>
+                    <span class="text-xs font-bold text-slate-500">四位數平分任務</span>
+                </div>
+                
+                <!-- 抽象同步表徵：位值色彩編碼橫式與帶分數呈現 -->
+                <div class="flex items-center text-xl sm:text-2xl md:text-3xl font-black tracking-wider flex-wrap gap-1">
+                    <span id="eq-dividend" class="flex items-center px-1">
+                        <span id="eq-thousands" class="color-thousands">3</span>
+                        <span id="eq-hundreds" class="color-hundreds">4</span>
+                        <span id="eq-tens" class="color-tens">6</span>
+                        <span id="eq-ones" class="color-ones">2</span>
+                    </span>
+                    <span class="mx-1 text-slate-400">÷</span>
+                    <span id="eq-divisor" class="color-divisor bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200">3</span>
+                    <span class="mx-1 text-slate-400">=</span>
+                    <span id="eq-quotient" class="text-emerald-600 bg-emerald-50 px-3 py-0.5 rounded-lg border border-emerald-200 min-w-[2.5rem] text-center">?</span>
+                    
+                    <!-- 餘數與分子在上分母在下之帶分數表徵區 -->
+                    <div id="eq-remainder-group" class="hidden flex items-center gap-2 text-slate-600 text-base sm:text-lg">
+                        <span>⋯ 剩 <span id="eq-remainder" class="text-purple-600 font-bold">0</span></span>
+                        
+                        <!-- 帶分數規範呈現：分子在上、分母在下 -->
+                        <div class="flex items-center gap-1 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-xl text-purple-900 font-extrabold text-xs sm:text-sm">
+                            <span class="text-slate-500 font-normal">即</span>
+                            <span id="frac-whole" class="text-emerald-600 font-black text-sm sm:text-base">1154</span>
+                            <span class="inline-flex flex-col items-center justify-center text-xs font-black leading-tight border-l border-purple-200 pl-1.5 ml-0.5">
+                                <span id="frac-num" class="border-b-2 border-purple-400 w-full text-center px-1 text-purple-700">0</span>
+                                <span id="frac-den" class="w-full text-center px-1 text-amber-700">3</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Action Controls -->
+            <div class="flex items-center gap-2 sm:gap-2.5 ml-auto flex-wrap justify-end">
+                <button onclick="generateRandomExactProblem()" class="min-w-[44px] min-h-[44px] px-3 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm">
+                    <i data-lucide="sparkles" size="18"></i>
+                    <span>隨機整除題</span>
+                </button>
+                <button onclick="generateAdvancedProblem()" class="min-w-[44px] min-h-[44px] px-3 py-2 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm">
+                    <i data-lucide="zap" size="18"></i>
+                    <span>進階題(含餘數)</span>
+                </button>
+                <button onclick="handleUndo()" id="btn-undo" class="min-w-[44px] min-h-[44px] px-3 py-2 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i data-lucide="undo-2" size="18"></i>
+                    <span class="hidden sm:inline">復原</span>
+                </button>
+                <button onclick="handleReset()" class="min-w-[44px] min-h-[44px] px-3 py-2 bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-700 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm">
+                    <i data-lucide="rotate-ccw" size="18"></i>
+                    <span class="hidden sm:inline">重置</span>
+                </button>
+                <button onclick="openSettingsModal()" class="min-w-[44px] min-h-[44px] px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md">
+                    <i data-lucide="settings-2" size="18"></i>
+                    <span>自訂題</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- 2. 主操作區：左側錢包銀行與換幣區 (5欄)，右側平分放置區 (7欄) -->
+        <main class="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3 min-h-0 overflow-hidden">
+            
+            <!-- 左側區域：錢包銀行與多階退位換幣區 -->
+            <section class="md:col-span-5 lg:col-span-5 flex flex-col gap-2.5 min-h-0">
+                <!-- 錢包銀行容器 -->
+                <div class="flex-1 bg-white rounded-3xl border-2 border-indigo-200 shadow-md flex flex-col overflow-hidden">
+                    <!-- Bank Header -->
+                    <div class="bg-indigo-600 p-2.5 sm:p-3.5 text-white flex items-center justify-between shadow-sm shrink-0">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="landmark" size="20"></i>
+                            <h2 class="font-black text-sm sm:text-base tracking-wide">錢包銀行</h2>
+                        </div>
+                        <div class="bg-indigo-700/80 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                            <span>剩餘:</span>
+                            <span id="bank-total-text" class="text-yellow-300 text-sm sm:text-base font-black">3462</span>
+                            <span>元</span>
+                        </div>
+                    </div>
+
+                    <!-- 四位數位值錢幣槽 (1000元藍長方, 100元紅長方, 10元, 1元) -->
+                    <div class="p-2 sm:p-3 flex-1 flex flex-col gap-2 overflow-y-auto bg-slate-50/50">
+                        <!-- Thousands Slot (藍色長方形 1000 元) -->
+                        <div class="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200 shadow-inner flex flex-col gap-1.5">
+                            <div class="flex justify-between items-center border-b pb-1 border-slate-100">
+                                <span class="text-xs font-black color-thousands tracking-wider flex items-center gap-1">
+                                    <span class="w-3.5 h-2.5 rounded-sm bg-thousands inline-block"></span> 千位長方形 (1000元)
+                                </span>
+                                <span class="text-xs font-extrabold text-slate-500">
+                                    <span id="bank-thousands-count" class="text-sm font-black color-thousands">3</span> 個
+                                </span>
+                            </div>
+                            <div id="bank-thousands-container" class="flex flex-wrap gap-2 min-h-[48px] items-center p-1">
+                                <!-- Dynamic Thousands Coins -->
+                            </div>
+                        </div>
+
+                        <!-- Hundreds Slot (紅色長方形 100 元) -->
+                        <div class="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200 shadow-inner flex flex-col gap-1.5">
+                            <div class="flex justify-between items-center border-b pb-1 border-slate-100">
+                                <span class="text-xs font-black color-hundreds tracking-wider flex items-center gap-1">
+                                    <span class="w-3.5 h-2.5 rounded-sm bg-hundreds inline-block"></span> 百位長方形 (100元)
+                                </span>
+                                <span class="text-xs font-extrabold text-slate-500">
+                                    <span id="bank-hundreds-count" class="text-sm font-black color-hundreds">4</span> 個
+                                </span>
+                            </div>
+                            <div id="bank-hundreds-container" class="flex flex-wrap gap-1.5 min-h-[48px] items-center p-1">
+                                <!-- Dynamic Hundreds Coins -->
+                            </div>
+                        </div>
+
+                        <!-- Tens Slot (紅色 10 元) -->
+                        <div class="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200 shadow-inner flex flex-col gap-1.5">
+                            <div class="flex justify-between items-center border-b pb-1 border-slate-100">
+                                <span class="text-xs font-black color-tens tracking-wider flex items-center gap-1">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-tens inline-block"></span> 十位錢幣 (10元)
+                                </span>
+                                <span class="text-xs font-extrabold text-slate-500">
+                                    <span id="bank-tens-count" class="text-sm font-black color-tens">6</span> 個
+                                </span>
+                            </div>
+                            <div id="bank-tens-container" class="flex flex-wrap gap-1.5 min-h-[48px] items-center p-1">
+                                <!-- Dynamic Tens Coins -->
+                            </div>
+                        </div>
+
+                        <!-- Ones Slot (藍色 1 元) -->
+                        <div class="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200 shadow-inner flex flex-col gap-1.5">
+                            <div class="flex justify-between items-center border-b pb-1 border-slate-100">
+                                <span class="text-xs font-black color-ones tracking-wider flex items-center gap-1">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-ones inline-block"></span> 個位錢幣 (1元)
+                                </span>
+                                <span class="text-xs font-extrabold text-slate-500">
+                                    <span id="bank-ones-count" class="text-sm font-black color-ones">2</span> 個
+                                </span>
+                            </div>
+                            <div id="bank-ones-container" class="flex flex-wrap gap-1.5 min-h-[48px] items-center p-1">
+                                <!-- Dynamic Ones Coins -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 退位換幣區 -->
+                <div id="exchange-zone" class="drop-target h-20 sm:h-24 rounded-2xl bg-amber-50/90 border-2 border-dashed border-amber-400 p-2 flex flex-col items-center justify-center text-center transition-all shrink-0 cursor-pointer hover:bg-amber-100/80">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <div class="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center font-black shadow-sm">
+                            <i data-lucide="arrow-left-right" size="16"></i>
+                        </div>
+                        <span class="text-amber-900 font-black text-xs sm:text-sm">換幣區 (不夠分時向下換10個)</span>
+                    </div>
+                    <p class="text-[11px] text-amber-800 font-bold leading-tight">
+                        拖曳 <span class="color-thousands font-black">藍色1000元長方</span> 換 10個<span class="color-hundreds font-black">紅色100元長方</span> |
+                        <span class="color-hundreds font-black">100元長方</span> 換 10個<span class="color-tens font-black">10元</span> |
+                        <span class="color-tens font-black">10元</span> 換 10個<span class="color-ones font-black">1元</span>
+                    </p>
+                </div>
+            </section>
+
+            <!-- 右側區域：平分分配與個人盤區 (7欄) -->
+            <section class="md:col-span-7 lg:col-span-7 bg-white rounded-3xl border-2 border-slate-200 shadow-md p-3 sm:p-4 flex flex-col min-h-0">
+                <!-- Section Header -->
+                <div class="flex items-center justify-between border-b pb-2.5 border-slate-100 shrink-0">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="users" class="color-divisor" size="22"></i>
+                        <h2 class="font-black text-sm sm:text-base text-slate-800">
+                            平分給 <span id="divisor-text" class="color-divisor text-xl font-black">3</span> 個人
+                        </h2>
+                    </div>
+                    <div class="text-[11px] sm:text-xs text-slate-500 font-bold bg-slate-100 px-3 py-1 rounded-full">
+                        將錢幣拖曳至下方個人托盤中
+                    </div>
+                </div>
+
+                <!-- Dynamic Recipients Grid (2 Columns on grid for space saving) -->
+                <div id="recipients-container" class="flex-1 overflow-y-auto my-2 pr-1 grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-h-0">
+                    <!-- Recipient Trays generated dynamically -->
+                </div>
+
+                <!-- Bottom Helper & Self-Explanation Prompt Bar -->
+                <div id="guidance-bar" class="bg-indigo-50 border border-indigo-200 rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-2.5 shrink-0">
+                    <div class="flex items-center gap-2.5 overflow-hidden">
+                        <div class="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <i data-lucide="sparkles" size="20"></i>
+                        </div>
+                        <div class="overflow-hidden">
+                            <div class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">教學引導思考</div>
+                            <div id="guidance-text" class="text-xs sm:text-sm font-bold text-indigo-950 truncate">
+                                請先從最大的「千位 (1000元)」開始平分給每個人。
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button onclick="handleSubmission()" class="min-w-[44px] min-h-[44px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-black shadow transition-all flex items-center gap-1.5">
+                            <i data-lucide="send" size="16"></i>
+                            <span>繳交</span>
+                        </button>
+                        <button onclick="triggerSelfExplanationPrompt()" class="min-w-[44px] min-h-[44px] px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow transition-all flex items-center gap-1">
+                            <i data-lucide="help-circle" size="16"></i>
+                            <span class="hidden sm:inline">小提問</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals Layer -->
+
+    <!-- Submit Stage 1 Modal: 剛好分完 or 還有餘數 -->
+    <div id="modal-submit-type" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl border-4 border-emerald-500 modal-bounce flex flex-col gap-4">
+            <div class="flex items-center gap-3 text-emerald-600">
+                <div class="p-2 bg-emerald-100 rounded-2xl">
+                    <i data-lucide="file-check-2" size="30"></i>
+                </div>
+                <h3 class="text-lg sm:text-xl font-black text-slate-800">繳交驗證 (步驟 1/2)</h3>
+            </div>
+            
+            <p class="text-sm sm:text-base font-bold text-slate-700 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 leading-relaxed text-center">
+                你已經把錢幣平分好了！請問這題是：
+            </p>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="answerSubmitType('exact')" class="p-4 bg-emerald-50 border-2 border-emerald-300 hover:bg-emerald-100 active:scale-95 rounded-2xl font-black text-emerald-950 text-base shadow-sm flex flex-col items-center gap-1">
+                    <i data-lucide="check-circle" size="24" class="text-emerald-600"></i>
+                    <span>剛好分完</span>
+                </button>
+                <button onclick="answerSubmitType('remainder')" class="p-4 bg-purple-50 border-2 border-purple-300 hover:bg-purple-100 active:scale-95 rounded-2xl font-black text-purple-950 text-base shadow-sm flex flex-col items-center gap-1">
+                    <i data-lucide="pie-chart" size="24" class="text-purple-600"></i>
+                    <span>還有餘數</span>
+                </button>
+            </div>
+
+            <button onclick="closeModal('modal-submit-type')" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 font-bold rounded-xl text-slate-600 text-xs sm:text-sm transition-all flex items-center justify-center gap-1 mt-1">
+                <i data-lucide="arrow-left" size="16"></i>
+                <span>回到操作區觀察</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Submit Stage 2 Modal: 數字鍵盤輸入餘數 -->
+    <div id="modal-submit-remainder" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-5 sm:p-6 max-w-xs sm:max-w-sm w-full shadow-2xl border-4 border-purple-500 modal-bounce flex flex-col gap-3">
+            <div class="flex items-center gap-2 text-purple-600">
+                <div class="p-1.5 bg-purple-100 rounded-xl">
+                    <i data-lucide="calculator" size="24"></i>
+                </div>
+                <h3 class="text-base sm:text-lg font-black text-slate-800">餘數回答 (步驟 2/2)</h3>
+            </div>
+            
+            <p class="text-xs sm:text-sm font-bold text-slate-600 text-center">
+                請問銀行裡剩下的「餘數」是多少元呢？
+            </p>
+
+            <!-- 輸入數值顯示區 -->
+            <div class="bg-slate-100 rounded-2xl p-3 border-2 border-slate-300 text-center flex justify-between items-center">
+                <span class="text-xs font-bold text-slate-400">輸入數字:</span>
+                <span id="keypad-display" class="text-3xl font-black text-purple-700 min-h-[40px] flex items-center tracking-wider">0</span>
+            </div>
+
+            <!-- 數字鍵盤 Pad -->
+            <div class="grid grid-cols-3 gap-2">
+                <button onclick="pressKeypad(1)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">1</button>
+                <button onclick="pressKeypad(2)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">2</button>
+                <button onclick="pressKeypad(3)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">3</button>
+                <button onclick="pressKeypad(4)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">4</button>
+                <button onclick="pressKeypad(5)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">5</button>
+                <button onclick="pressKeypad(6)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">6</button>
+                <button onclick="pressKeypad(7)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">7</button>
+                <button onclick="pressKeypad(8)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">8</button>
+                <button onclick="pressKeypad(9)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">9</button>
+                <button onclick="clearKeypad()" class="py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-black text-sm shadow-sm border border-red-200 flex items-center justify-center">
+                    <i data-lucide="delete" size="20"></i>
+                </button>
+                <button onclick="pressKeypad(0)" class="py-3 bg-slate-50 hover:bg-slate-200 active:bg-slate-300 rounded-xl font-black text-xl text-slate-800 shadow-sm border border-slate-200">0</button>
+                <button onclick="confirmRemainderKeypad()" class="py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-sm shadow-md flex items-center justify-center">確認</button>
+            </div>
+
+            <button onclick="closeModal('modal-submit-remainder')" class="w-full py-2 bg-slate-100 hover:bg-slate-200 font-bold rounded-xl text-slate-600 text-xs transition-all flex items-center justify-center gap-1 mt-1">
+                <i data-lucide="arrow-left" size="14"></i>
+                <span>回到操作區觀察</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Final Success Stage Modal -->
+    <div id="modal-final-success" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border-4 border-emerald-400 modal-bounce flex flex-col gap-4 text-center">
+            <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <i data-lucide="trophy" size="36"></i>
+            </div>
+            
+            <div>
+                <h3 class="text-xl font-black text-slate-800">🎉 恭喜完全答對！</h3>
+                <p id="final-success-msg" class="text-sm font-bold text-slate-600 mt-1">
+                    你成功進行了平分與位值換算！
+                </p>
+            </div>
+
+            <div class="flex flex-col gap-2 pt-2 border-t border-slate-100">
+                <button onclick="closeModal('modal-final-success')" class="w-full py-3 bg-slate-100 hover:bg-slate-200 font-black rounded-xl text-slate-700 text-sm transition-all flex items-center justify-center gap-1.5">
+                    <i data-lucide="eye" size="18"></i>
+                    <span>回到操作區</span>
+                </button>
+                <button onclick="closeModal('modal-final-success'); generateRandomExactProblem();" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-1.5">
+                    <i data-lucide="sparkles" size="18"></i>
+                    <span>隨機出題（整除）</span>
+                </button>
+                <button onclick="closeModal('modal-final-success'); generateAdvancedProblem();" class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-1.5">
+                    <i data-lucide="zap" size="18"></i>
+                    <span>進階挑戰（有餘數）</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Self Explanation Modal (自我解釋思考引導) -->
+    <div id="modal-explanation" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl border-4 border-indigo-500 modal-bounce flex flex-col gap-4">
+            <div class="flex items-center gap-3 text-indigo-600">
+                <div class="p-2 bg-indigo-100 rounded-2xl">
+                    <i data-lucide="brain-circuit" size="30"></i>
+                </div>
+                <h3 class="text-lg sm:text-xl font-black text-slate-800">思考小探險</h3>
+            </div>
+            
+            <p id="explanation-question" class="text-sm sm:text-base font-bold text-slate-700 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 leading-relaxed">
+                除法平分時，為什麼要先從最大的「1000元（千位）」開始分呢？
+            </p>
+
+            <div id="explanation-options" class="flex flex-col gap-2">
+                <!-- Option buttons generated dynamically -->
+            </div>
+
+            <button onclick="closeModal('modal-explanation')" class="w-full py-2.5 bg-slate-200 hover:bg-slate-300 font-black rounded-xl text-slate-700 text-xs sm:text-sm transition-all mt-1">
+                我明白了，繼續操作
+            </button>
+        </div>
+    </div>
+
+    <!-- Prediction Modal (動腦猜猜看 - 預測與估算) -->
+    <div id="modal-predict" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl border-4 border-amber-400 modal-bounce flex flex-col gap-4">
+            <div class="flex items-center gap-3 text-amber-600">
+                <div class="p-2 bg-amber-100 rounded-2xl">
+                    <i data-lucide="lightbulb" size="30"></i>
+                </div>
+                <h3 class="text-lg sm:text-xl font-black text-slate-800">動腦猜猜看（預測與估算）</h3>
+            </div>
+            
+            <p class="text-sm sm:text-base font-bold text-slate-700">
+                要把 <span id="predict-dividend" class="text-indigo-600 font-black">3462</span> 元平分給 <span id="predict-divisor" class="text-amber-600 font-black">3</span> 個人：
+            </p>
+
+            <div class="bg-amber-50 p-3.5 rounded-2xl border border-amber-200 flex flex-col gap-2.5">
+                <label class="text-xs font-black text-amber-900">估計一下，每個人大約可以分到多少元？</label>
+                <div id="predict-options" class="flex items-center justify-center gap-2 flex-wrap">
+                    <!-- Dynamic estimation buttons generated by JavaScript -->
+                </div>
+            </div>
+
+            <button onclick="closeModal('modal-predict')" class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl text-sm transition-all shadow-md">
+                開始實作驗證！
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings & Problem Customization Modal -->
+    <div id="modal-settings" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9000] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-5 sm:p-6 max-w-xs sm:max-w-sm w-full shadow-2xl border-4 border-slate-800 modal-bounce flex flex-col gap-4">
+            <h3 class="text-lg sm:text-xl font-black text-slate-800 text-center">設定自訂題目</h3>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-black color-thousands tracking-wider block mb-1">總金額 (被除數 1000~9999)</label>
+                    <input id="setting-dividend" type="number" min="1000" max="9999" value="3462" class="w-full text-xl font-black p-2.5 bg-slate-100 rounded-xl border-2 border-slate-200 text-center outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="text-xs font-black color-divisor tracking-wider block mb-1">平分人數 (除數 2~6 人)</label>
+                    <input id="setting-divisor" type="number" min="2" max="6" value="3" class="w-full text-xl font-black p-2.5 bg-slate-100 rounded-xl border-2 border-slate-200 text-center color-divisor outline-none focus:border-amber-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                <button onclick="closeModal('modal-settings'); generateRandomExactProblem();" class="py-2.5 px-2 font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs flex items-center justify-center gap-1">
+                    <i data-lucide="sparkles" size="14"></i> 隨機整除題
+                </button>
+                <button onclick="closeModal('modal-settings'); generateAdvancedProblem();" class="py-2.5 px-2 font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-xl text-xs flex items-center justify-center gap-1">
+                    <i data-lucide="zap" size="14"></i> 進階題(含餘數)
+                </button>
+            </div>
+
+            <div class="flex gap-2">
+                <button onclick="closeModal('modal-settings')" class="flex-1 py-2.5 font-bold text-slate-500 hover:bg-slate-100 rounded-xl text-xs sm:text-sm">取消</button>
+                <button onclick="applyNewProblem()" class="flex-1 py-2.5 font-black bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs sm:text-sm shadow-md">更新自訂題</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Positive Reinforcement Toast Notification -->
+    <div id="toast-message" class="fixed top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-2.5 rounded-2xl shadow-2xl z-[10000] hidden transition-all duration-300 flex items-center gap-2.5 font-black text-sm sm:text-base border-2 border-white/20 max-w-[90vw]">
+        <i id="toast-icon" data-lucide="check-circle" class="text-emerald-400 shrink-0" size="22"></i>
+        <span id="toast-text">讚！成功平分錢幣！</span>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let historyStack = [];
+        let state = {
+            dividend: 3462,
+            divisor: 3,
+            bank: { thousands: 3, hundreds: 4, tens: 6, ones: 2 },
+            recipients: [
+                { thousands: 0, hundreds: 0, tens: 0, ones: 0 },
+                { thousands: 0, hundreds: 0, tens: 0, ones: 0 },
+                { thousands: 0, hundreds: 0, tens: 0, ones: 0 }
+            ],
+            userPrediction: null
+        };
+
+        // Touch & Pointer Drag State
+        let dragInfo = {
+            active: false,
+            type: null, // 'thousands' | 'hundreds' | 'tens' | 'ones'
+            source: null, // 'bank' | recipientIndex
+            element: null
+        };
+
+        // Initialize App on DOM Loaded
+        window.onload = function() {
+            initApp();
+            lucide.createIcons();
+            // Trigger prediction prompt on initial load
+            setTimeout(() => { openPredictionModal(); }, 400);
+        };
+
+        function initApp() {
+            saveHistoryState();
+            renderAll();
+            setupPointerDragListeners();
+        }
+
+        // Save State for Undo (Max 20 steps)
+        function saveHistoryState() {
+            historyStack.push(JSON.parse(JSON.stringify(state)));
+            if (historyStack.length > 20) historyStack.shift();
+            updateUndoButton();
+        }
+
+        function updateUndoButton() {
+            const undoBtn = document.getElementById('btn-undo');
+            if (undoBtn) undoBtn.disabled = historyStack.length <= 1;
+        }
+
+        function handleUndo() {
+            if (historyStack.length > 1) {
+                historyStack.pop();
+                state = JSON.parse(JSON.stringify(historyStack[historyStack.length - 1]));
+                renderAll();
+                showToast("已復原上一步驟", "info");
+            }
+        }
+
+        function handleReset() {
+            historyStack = [];
+            const th = Math.floor(state.dividend / 1000);
+            const hu = Math.floor((state.dividend % 1000) / 100);
+            const te = Math.floor((state.dividend % 100) / 10);
+            const on = state.dividend % 10;
+
+            state.bank = { thousands: th, hundreds: hu, tens: te, ones: on };
+            state.recipients = Array.from({ length: state.divisor }, () => ({
+                thousands: 0, hundreds: 0, tens: 0, ones: 0
+            }));
+
+            saveHistoryState();
+            renderAll();
+            showToast("已重置回到初始狀態", "info");
+        }
+
+        // 生成隨機整除題目 (無餘數)
+        function generateRandomExactProblem() {
+            const divisor = Math.floor(Math.random() * 4) + 2; // 2 ~ 5 人
+            const minQuotient = Math.max(200, Math.ceil(1000 / divisor));
+            const maxQuotient = Math.floor(9999 / divisor);
+            const quotient = Math.floor(Math.random() * (maxQuotient - minQuotient + 1)) + minQuotient;
+            const dividend = quotient * divisor;
+
+            state.dividend = dividend;
+            state.divisor = divisor;
+
+            handleReset();
+            showToast(`生成整除題：${dividend} ÷ ${divisor}`, "success");
+            setTimeout(() => { openPredictionModal(); }, 300);
+        }
+
+        // 生成隨機進階題目 (含餘數)
+        function generateAdvancedProblem() {
+            const divisor = Math.floor(Math.random() * 5) + 2; // 2 ~ 6 人
+            let dividend = Math.floor(Math.random() * 8500) + 1200; // 1200 ~ 9700
+            
+            // 70% 機率製造餘數
+            if (dividend % divisor === 0) {
+                dividend += Math.floor(Math.random() * (divisor - 1)) + 1;
+            }
+
+            state.dividend = dividend;
+            state.divisor = divisor;
+
+            handleReset();
+            const hasRemainder = dividend % divisor !== 0;
+            showToast(`生成進階題：${dividend} ÷ ${divisor}${hasRemainder ? ' (含餘數挑戰)' : ''}`, "info");
+            setTimeout(() => { openPredictionModal(); }, 300);
+        }
+
+        // CRA Sync Rendering Engine
+        function renderAll() {
+            renderHeaderEquation();
+            renderBank();
+            renderRecipients();
+            updateGuidanceText();
+            lucide.createIcons();
+        }
+
+        // 1. Abstract Equation Sync with Fraction Representation
+        function renderHeaderEquation() {
+            const thVal = Math.floor(state.dividend / 1000);
+            const huVal = Math.floor((state.dividend % 1000) / 100);
+            const teVal = Math.floor((state.dividend % 100) / 10);
+            const onVal = state.dividend % 10;
+            
+            document.getElementById('eq-thousands').innerText = thVal;
+            document.getElementById('eq-hundreds').innerText = huVal;
+            document.getElementById('eq-tens').innerText = teVal;
+            document.getElementById('eq-ones').innerText = onVal;
+            document.getElementById('eq-divisor').innerText = state.divisor;
+
+            // Calculate recipient totals
+            const recipientAmounts = state.recipients.map(r => r.thousands * 1000 + r.hundreds * 100 + r.tens * 10 + r.ones);
+            const allEqual = recipientAmounts.every(val => val === recipientAmounts[0]);
+            const perPerson = recipientAmounts[0];
+            const bankRemaining = state.bank.thousands * 1000 + state.bank.hundreds * 100 + state.bank.tens * 10 + state.bank.ones;
+
+            const quotientEl = document.getElementById('eq-quotient');
+            const remainderGroupEl = document.getElementById('eq-remainder-group');
+            const remainderEl = document.getElementById('eq-remainder');
+            
+            const fracWholeEl = document.getElementById('frac-whole');
+            const fracNumEl = document.getElementById('frac-num');
+            const fracDenEl = document.getElementById('frac-den');
+
+            if (allEqual && perPerson > 0 && bankRemaining < state.divisor) {
+                quotientEl.innerText = perPerson;
+                remainderEl.innerText = bankRemaining;
+
+                if (bankRemaining > 0) {
+                    remainderGroupEl.classList.remove('hidden');
+                    remainderGroupEl.classList.add('flex');
+                    // 帶分數視覺呈現：分子在上、分母在下
+                    fracWholeEl.innerText = perPerson;
+                    fracNumEl.innerText = bankRemaining;
+                    fracDenEl.innerText = state.divisor;
+                } else {
+                    remainderGroupEl.classList.add('hidden');
+                    remainderGroupEl.classList.remove('flex');
+                }
+            } else {
+                quotientEl.innerText = "?";
+                remainderGroupEl.classList.add('hidden');
+                remainderGroupEl.classList.remove('flex');
+            }
+
+            document.getElementById('divisor-text').innerText = state.divisor;
+            document.getElementById('predict-dividend').innerText = state.dividend;
+            document.getElementById('predict-divisor').innerText = state.divisor;
+        }
+
+        // 2. Concrete Bank Rendering (Four Place Values)
+        function renderBank() {
+            const bankTotal = state.bank.thousands * 1000 + state.bank.hundreds * 100 + state.bank.tens * 10 + state.bank.ones;
+            document.getElementById('bank-total-text').innerText = bankTotal;
+            
+            document.getElementById('bank-thousands-count').innerText = state.bank.thousands;
+            document.getElementById('bank-hundreds-count').innerText = state.bank.hundreds;
+            document.getElementById('bank-tens-count').innerText = state.bank.tens;
+            document.getElementById('bank-ones-count').innerText = state.bank.ones;
+
+            const thContainer = document.getElementById('bank-thousands-container');
+            const huContainer = document.getElementById('bank-hundreds-container');
+            const teContainer = document.getElementById('bank-tens-container');
+            const onContainer = document.getElementById('bank-ones-container');
+
+            thContainer.innerHTML = '';
+            for (let i = 0; i < state.bank.thousands; i++) {
+                thContainer.appendChild(createCoinNode('thousands', 'bank'));
+            }
+
+            huContainer.innerHTML = '';
+            for (let i = 0; i < state.bank.hundreds; i++) {
+                huContainer.appendChild(createCoinNode('hundreds', 'bank'));
+            }
+
+            teContainer.innerHTML = '';
+            for (let i = 0; i < state.bank.tens; i++) {
+                teContainer.appendChild(createCoinNode('tens', 'bank'));
+            }
+
+            onContainer.innerHTML = '';
+            for (let i = 0; i < state.bank.ones; i++) {
+                onContainer.appendChild(createCoinNode('ones', 'bank'));
+            }
+        }
+
+        // 3. Semi-Concrete Recipient Trays with #94a3b8 guidelines
+        function renderRecipients() {
+            const container = document.getElementById('recipients-container');
+            container.innerHTML = '';
+
+            state.recipients.forEach((rec, idx) => {
+                const amount = rec.thousands * 1000 + rec.hundreds * 100 + rec.tens * 10 + rec.ones;
+                
+                const card = document.createElement('div');
+                card.setAttribute('data-recipient-index', idx);
+                card.className = "drop-target bg-slate-50/90 rounded-2xl p-2 sm:p-2.5 border-2 divider-line shadow-sm flex flex-col justify-between gap-1.5 transition-all min-h-[95px]";
+
+                card.innerHTML = `
+                    <!-- Top Bar: Recipient Badge & Amount -->
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-200/60 pb-1">
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 font-black text-xs flex items-center justify-center shadow-xs">
+                                ${idx + 1}
+                            </div>
+                            <span class="text-xs font-black text-slate-700">第 ${idx + 1} 個人</span>
+                        </div>
+                        <div class="shrink-0 bg-emerald-600 px-2 py-0.5 rounded-lg text-white font-black text-xs shadow-xs flex items-center gap-0.5">
+                            <span>${amount}</span>
+                            <span class="text-[10px] opacity-80">元</span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom: Coins & Rectangles Held (Concrete Display with Return Tap) -->
+                    <div class="flex-1 w-full bg-white rounded-xl p-1.5 border border-slate-200 flex flex-wrap gap-1 items-center min-h-[44px]">
+                        ${Array.from({ length: rec.thousands }).map(() => `
+                            <div onclick="returnCoinToBank(${idx}, 'thousands')" class="w-10 h-7 sm:w-11 sm:h-7 rounded-lg bg-thousands border-2 border-blue-800 text-white font-black text-[10px] flex items-center justify-center shadow-sm cursor-pointer hover:scale-110 active:scale-95 transition-all" title="點擊收回錢包">
+                                1000
+                            </div>
+                        `).join('')}
+                        ${Array.from({ length: rec.hundreds }).map(() => `
+                            <div onclick="returnCoinToBank(${idx}, 'hundreds')" class="w-9 h-6 sm:w-10 sm:h-6 rounded-lg bg-hundreds border-2 border-red-800 text-white font-black text-[10px] flex items-center justify-center shadow-sm cursor-pointer hover:scale-110 active:scale-95 transition-all" title="點擊收回錢包">
+                                100
+                            </div>
+                        `).join('')}
+                        ${Array.from({ length: rec.tens }).map(() => `
+                            <div onclick="returnCoinToBank(${idx}, 'tens')" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-tens border-2 border-red-600 text-white font-black text-[10px] flex items-center justify-center shadow-sm cursor-pointer hover:scale-110 active:scale-95 transition-all" title="點擊收回錢包">
+                                10
+                            </div>
+                        `).join('')}
+                        ${Array.from({ length: rec.ones }).map(() => `
+                            <div onclick="returnCoinToBank(${idx}, 'ones')" class="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-ones border-2 border-blue-600 text-white font-black text-[9px] flex items-center justify-center shadow-sm cursor-pointer hover:scale-110 active:scale-95 transition-all" title="點擊收回錢包">
+                                1
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        // Create Dragable Coin Elements (Rectangles for 1000 & 100, Circles for 10 & 1)
+        function createCoinNode(type, source) {
+            const coin = document.createElement('div');
+            coin.dataset.type = type;
+            coin.dataset.source = source;
+
+            if (type === 'thousands') {
+                coin.className = "coin-node min-w-[56px] min-h-[44px] w-14 h-9 bg-thousands border-2 border-blue-800 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-md ring-2 ring-white/30 shrink-0";
+                coin.innerText = "1000";
+            } else if (type === 'hundreds') {
+                coin.className = "coin-node min-w-[48px] min-h-[44px] w-12 h-8 bg-hundreds border-2 border-red-800 rounded-lg flex items-center justify-center text-white font-black text-xs shadow-md ring-2 ring-white/30 shrink-0";
+                coin.innerText = "100";
+            } else if (type === 'tens') {
+                coin.className = "coin-node min-w-[44px] min-h-[44px] w-11 h-11 bg-tens border-2 border-red-600 rounded-full flex items-center justify-center text-white font-black text-xs shadow-md ring-2 ring-white/30 shrink-0";
+                coin.innerText = "10";
+            } else {
+                coin.className = "coin-node min-w-[44px] min-h-[44px] w-11 h-11 bg-ones border-2 border-blue-600 rounded-full flex items-center justify-center text-white font-black text-xs shadow-md ring-2 ring-white/30 shrink-0";
+                coin.innerText = "1";
+            }
+            return coin;
+        }
+
+        function setupPointerDragListeners() {
+            window.addEventListener('pointerdown', handlePointerDown);
+            window.addEventListener('pointermove', handlePointerMove);
+            window.addEventListener('pointerup', handlePointerUp);
+            window.addEventListener('pointercancel', handlePointerUp);
+        }
+
+        function handlePointerDown(e) {
+            const targetCoin = e.target.closest('.coin-node');
+            if (!targetCoin) return;
+
+            e.preventDefault();
+            const type = targetCoin.dataset.type;
+            const source = targetCoin.dataset.source;
+
+            dragInfo.active = true;
+            dragInfo.type = type;
+            dragInfo.source = source;
+
+            const dragEl = targetCoin.cloneNode(true);
+            dragEl.classList.add('coin-dragging');
+            dragEl.style.left = `${e.clientX - 22}px`;
+            dragEl.style.top = `${e.clientY - 22}px`;
+            document.body.appendChild(dragEl);
+
+            dragInfo.element = dragEl;
+        }
+
+        function handlePointerMove(e) {
+            if (!dragInfo.active || !dragInfo.element) return;
+            e.preventDefault();
+
+            dragInfo.element.style.left = `${e.clientX - 22}px`;
+            dragInfo.element.style.top = `${e.clientY - 22}px`;
+
+            document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target-hover'));
+            const hoveredEl = document.elementFromPoint(e.clientX, e.clientY);
+            const dropTarget = hoveredEl?.closest('.drop-target');
+            if (dropTarget) {
+                dropTarget.classList.add('drop-target-hover');
+            }
+        }
+
+        function handlePointerUp(e) {
+            if (!dragInfo.active) return;
+
+            document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target-hover'));
+            
+            const dropTarget = document.elementFromPoint(e.clientX, e.clientY)?.closest('.drop-target');
+
+            if (dropTarget) {
+                const recipientIdx = dropTarget.getAttribute('data-recipient-index');
+                if (recipientIdx !== null) {
+                    allocateCoinToRecipient(parseInt(recipientIdx), dragInfo.type);
+                } else if (dropTarget.id === 'exchange-zone') {
+                    exchangeDecomposeCoin(dragInfo.type);
+                }
+            }
+
+            if (dragInfo.element) {
+                dragInfo.element.remove();
+                dragInfo.element = null;
+            }
+            dragInfo.active = false;
+        }
+
+        // Logic 1: Allocate money to recipient
+        function allocateCoinToRecipient(recipientIdx, type) {
+            if (state.bank[type] <= 0) return;
+
+            saveHistoryState();
+            state.bank[type]--;
+            state.recipients[recipientIdx][type]++;
+
+            renderAll();
+            checkFairnessAndProgress();
+        }
+
+        // Logic 2: Decompose and exchange coin
+        function exchangeDecomposeCoin(type) {
+            if (type === 'thousands' && state.bank.thousands > 0) {
+                saveHistoryState();
+                state.bank.thousands--;
+                state.bank.hundreds += 10;
+                renderAll();
+                showToast("成功把 1 個 1000元藍色長方 換成 10 個 100元紅色長方！", "success");
+            } else if (type === 'hundreds' && state.bank.hundreds > 0) {
+                saveHistoryState();
+                state.bank.hundreds--;
+                state.bank.tens += 10;
+                renderAll();
+                showToast("成功把 1 個 100元紅色長方 換成 10 個 10元錢幣！", "success");
+            } else if (type === 'tens' && state.bank.tens > 0) {
+                saveHistoryState();
+                state.bank.tens--;
+                state.bank.ones += 10;
+                renderAll();
+                showToast("成功把 1 個 10元錢幣 換成 10 個 1元錢幣！", "success");
+            } else if (type === 'ones') {
+                showToast("1 元不能再向下換幣囉！", "warning");
+            }
+        }
+
+        // Logic 3: Return coin from recipient tray back to bank
+        function returnCoinToBank(recipientIdx, type) {
+            if (state.recipients[recipientIdx][type] > 0) {
+                saveHistoryState();
+                state.recipients[recipientIdx][type]--;
+                state.bank[type]++;
+                renderAll();
+            }
+        }
+
+        function updateGuidanceText() {
+            const guidanceEl = document.getElementById('guidance-text');
+            const totalInBank = state.bank.thousands * 1000 + state.bank.hundreds * 100 + state.bank.tens * 10 + state.bank.ones;
+            const recipientAmounts = state.recipients.map(r => r.thousands * 1000 + r.hundreds * 100 + r.tens * 10 + r.ones);
+            const allEqual = recipientAmounts.every(v => v === recipientAmounts[0]);
+
+            if (state.bank.thousands >= state.divisor) {
+                guidanceEl.innerHTML = `銀行還有 <span class="color-thousands font-black">${state.bank.thousands}</span> 個 1000 元長方，請平分給 <span class="color-divisor font-black">${state.divisor}</span> 個人。`;
+            } else if (state.bank.thousands > 0 && state.bank.thousands < state.divisor) {
+                guidanceEl.innerHTML = `思考一下：剩下的 <span class="color-thousands font-black">${state.bank.thousands}</span> 個 1000 元不夠分，請拖到【換幣區】換成 100 元。`;
+            } else if (state.bank.hundreds >= state.divisor) {
+                guidanceEl.innerHTML = `請把 <span class="color-hundreds font-black">${state.bank.hundreds}</span> 個 100 元長方平分給每個人。`;
+            } else if (state.bank.hundreds > 0 && state.bank.hundreds < state.divisor) {
+                guidanceEl.innerHTML = `剩下的 <span class="color-hundreds font-black">${state.bank.hundreds}</span> 個 100 元不夠分，請拖到【換幣區】換成 10 元。`;
+            } else if (state.bank.tens >= state.divisor) {
+                guidanceEl.innerHTML = `請把 <span class="color-tens font-black">${state.bank.tens}</span> 個 10 元錢幣平分給每個人。`;
+            } else if (state.bank.tens > 0 && state.bank.tens < state.divisor) {
+                guidanceEl.innerHTML = `剩下的 <span class="color-tens font-black">${state.bank.tens}</span> 個 10 元不夠分，請拖到【換幣區】換成 1 元。`;
+            } else if (state.bank.ones >= state.divisor) {
+                guidanceEl.innerHTML = `把剩下的 <span class="color-ones font-black">1元</span> 錢幣平分給每個人。`;
+            } else if (totalInBank < state.divisor && totalInBank > 0 && allEqual && recipientAmounts[0] > 0) {
+                guidanceEl.innerHTML = `平分完成！每人分得 <span class="text-emerald-600 font-black">${recipientAmounts[0]}</span> 元，銀行剩 <span class="color-ones font-black">${totalInBank}</span> 元，可以點選【繳交】。`;
+            } else if (totalInBank === 0 && allEqual && recipientAmounts[0] > 0) {
+                guidanceEl.innerHTML = `完美剛好平分完畢！每人分得 <span class="text-emerald-600 font-black">${recipientAmounts[0]}</span> 元，可以點選【繳交】。`;
+            } else if (!allEqual) {
+                guidanceEl.innerHTML = `注意看，每個人分到的錢好像還不一樣多喔，繼續調平一下！`;
+            }
+        }
+
+        let keypadValue = "";
+
+        // Automatic Progress Check
+        function checkFairnessAndProgress() {
+            const recipientAmounts = state.recipients.map(r => r.thousands * 1000 + r.hundreds * 100 + r.tens * 10 + r.ones);
+            const allEqual = recipientAmounts.every(v => v === recipientAmounts[0]);
+            const bankTotal = state.bank.thousands * 1000 + state.bank.hundreds * 100 + state.bank.tens * 10 + state.bank.ones;
+
+            if (bankTotal < state.divisor && allEqual && recipientAmounts[0] > 0) {
+                if (bankTotal === 0) {
+                    showToast(`平分完成！可以點選【繳交】驗證結果囉！`, "success");
+                } else {
+                    showToast(`平分完成！剩餘 ${bankTotal} 元不夠分，可以點選【繳交】囉！`, "success");
+                }
+            }
+        }
+
+        // 【繳交】按鈕觸發之階層檢核邏輯
+        function handleSubmission() {
+            const recipientAmounts = state.recipients.map(r => r.thousands * 1000 + r.hundreds * 100 + r.tens * 10 + r.ones);
+            const allEqual = recipientAmounts.every(v => v === recipientAmounts[0]);
+            const bankTotal = state.bank.thousands * 1000 + state.bank.hundreds * 100 + state.bank.tens * 10 + state.bank.ones;
+            const perPerson = recipientAmounts[0];
+
+            if (perPerson === 0 && bankTotal === state.dividend) {
+                showToast("錢包銀行裡還有錢，請試著把錢幣發給每個人喔！", "warning");
+                return;
+            }
+
+            // 條件 1: 如果學生沒有平分，提醒每個人分到的錢不一樣
+            if (!allEqual) {
+                showToast("每個人分到的錢不一樣喔！請檢查並調平再繳交。", "warning");
+                return;
+            }
+
+            // 條件 2: 如果學生已經平分，但還沒分完且餘數 >= 除數，提醒還可以繼續分
+            if (bankTotal >= state.divisor) {
+                showToast("每個人分到的錢一樣，但是銀行裡還夠再平分，還可以繼續分喔！", "warning");
+                return;
+            }
+
+            // 條件 3: 已完成平分 (bankTotal < state.divisor) -> 進入第一階段問答
+            openModal('modal-submit-type');
+        }
+
+        // 第一階段回答：剛好分完 ('exact') 或 還有餘數 ('remainder')
+        function answerSubmitType(choice) {
+            const bankTotal = state.bank.thousands * 1000 + state.bank.hundreds * 100 + state.bank.tens * 10 + state.bank.ones;
+            const hasRemainder = bankTotal > 0;
+
+            if (choice === 'exact') {
+                if (!hasRemainder) {
+                    // 答對（確實是整除），依然進入第二階段讓學生透過鍵盤填寫餘數 0
+                    closeModal('modal-submit-type');
+                    openSubmitRemainderModal();
+                } else {
+                    // 答錯
+                    showToast("再觀察看看喔！銀行裡是不是還有剩下的錢幣呢？", "warning");
+                }
+            } else if (choice === 'remainder') {
+                if (hasRemainder) {
+                    // 答對（確實有餘數），進入第二階段輸入餘數
+                    closeModal('modal-submit-type');
+                    openSubmitRemainderModal();
+                } else {
+                    // 答錯
+                    showToast("再觀察看看喔！錢幣是不是已經全部剛好分完了呢？", "warning");
+                }
+            }
+        }
+
+        // 第二階段：打開輸入餘數鍵盤彈窗
+        function openSubmitRemainderModal() {
+            keypadValue = "";
+            updateKeypadDisplay();
+            openModal('modal-submit-remainder');
+        }
+
+        function pressKeypad(num) {
+            if (keypadValue.length < 4) {
+                if (keypadValue === "0") keypadValue = "";
+                keypadValue += num;
+                updateKeypadDisplay();
+            }
+        }
+
+        function clearKeypad() {
+            keypadValue = "";
+            updateKeypadDisplay();
+        }
+
+        function updateKeypadDisplay() {
+            const display = document.getElementById('keypad-display');
+            display.innerText = keypadValue === "" ? "0" : keypadValue;
+        }
+
+        function confirmRemainderKeypad() {
+            const bankTotal = state.bank.thousands * 1000 + state.bank.hundreds * 100 + state.bank.tens * 10 + state.bank.ones;
+            const enteredVal = parseInt(keypadValue || "0", 10);
+
+            if (enteredVal === bankTotal) {
+                closeModal('modal-submit-remainder');
+                const perPerson = Math.floor(state.dividend / state.divisor);
+                if (bankTotal === 0) {
+                    openFinalSuccessModal(`太厲害了！答對了！每人分得 ${perPerson} 元，餘數確實是 0 元（剛好分完）！`);
+                } else {
+                    openFinalSuccessModal(`太厲害了！答對了！每人分得 ${perPerson} 元，餘數確實剩下 ${bankTotal} 元！`);
+                }
+            } else {
+                showToast("輸入的餘數不大對喔！可以點「回到操作區」算算看銀行剩下的錢！", "warning");
+            }
+        }
+
+        function openFinalSuccessModal(msg) {
+            document.getElementById('final-success-msg').innerText = msg;
+            openModal('modal-final-success');
+        }
+
+        // Self-Explanation Dialog (引導自我思考)
+        function triggerSelfExplanationPrompt() {
+            const questionEl = document.getElementById('explanation-question');
+            const optionsContainer = document.getElementById('explanation-options');
+
+            if (state.bank.thousands > 0 && state.bank.thousands < state.divisor) {
+                questionEl.innerHTML = `為什麼剩下的 <span class="color-thousands font-black">${state.bank.thousands}個1000元</span> 不能直接分給 ${state.divisor} 個人呢？`;
+                optionsContainer.innerHTML = `
+                    <button onclick="handleExplanationAnswer(true)" class="p-3 bg-indigo-50 border-2 border-indigo-200 hover:bg-indigo-100 rounded-xl text-left font-bold text-indigo-950 text-xs sm:text-sm">
+                        因為 1000元的個數比人數少，直接給的話會有人分不到，不公平。
+                    </button>
+                    <button onclick="handleExplanationAnswer(false)" class="p-3 bg-slate-50 border-2 border-slate-200 hover:bg-slate-100 rounded-xl text-left font-bold text-slate-700 text-xs sm:text-sm">
+                        因為 1000元的張數太大，不能拿來買東西。
+                    </button>
+                `;
+            } else {
+                questionEl.innerHTML = `在四位數平分時，為什麼要先從最大的「1000元（千位）」開始分，而不是從「1元（個位）」開始呢？`;
+                optionsContainer.innerHTML = `
+                    <button onclick="handleExplanationAnswer(true)" class="p-3 bg-indigo-50 border-2 border-indigo-200 hover:bg-indigo-100 rounded-xl text-left font-bold text-indigo-950 text-xs sm:text-sm">
+                        先分大面額（千位），如果不夠分還可以換成下一個小面額（百位）繼續平分。
+                    </button>
+                    <button onclick="handleExplanationAnswer(false)" class="p-3 bg-slate-50 border-2 border-slate-200 hover:bg-slate-100 rounded-xl text-left font-bold text-slate-700 text-xs sm:text-sm">
+                        因為 1000元的紫顏色比較好看。
+                    </button>
+                `;
+            }
+            openModal('modal-explanation');
+        }
+
+        function handleExplanationAnswer(isCorrect) {
+            if (isCorrect) {
+                showToast("觀念非常正確！你的數學思考邏輯超棒！", "success");
+            } else {
+                showToast("再想想看喔，觀察數量夠不夠平分給每個人？", "warning");
+            }
+            closeModal('modal-explanation');
+        }
+
+        // Prediction & Estimation Dialog
+        function openPredictionModal() {
+            const est = Math.floor(state.dividend / state.divisor);
+            const delta = Math.max(100, Math.floor(est * 0.25));
+            
+            const opt1 = Math.max(100, Math.floor((est - delta)/50)*50);
+            const opt2 = Math.floor(est/50)*50;
+            const opt3 = Math.floor((est + delta)/50)*50;
+
+            const optionsContainer = document.getElementById('predict-options');
+            if (optionsContainer) {
+                optionsContainer.innerHTML = `
+                    <button onclick="makePrediction(${opt1})" class="px-3 py-2 bg-white border-2 border-amber-300 rounded-xl font-black text-amber-900 hover:bg-amber-400 hover:text-white transition-all text-sm sm:text-base">約 ${opt1} 元</button>
+                    <button onclick="makePrediction(${opt2})" class="px-3 py-2 bg-white border-2 border-amber-300 rounded-xl font-black text-amber-900 hover:bg-amber-400 hover:text-white transition-all text-sm sm:text-base">約 ${opt2} 元</button>
+                    <button onclick="makePrediction(${opt3})" class="px-3 py-2 bg-white border-2 border-amber-300 rounded-xl font-black text-amber-900 hover:bg-amber-400 hover:text-white transition-all text-sm sm:text-base">約 ${opt3} 元</button>
+                `;
+            }
+
+            document.getElementById('predict-dividend').innerText = state.dividend;
+            document.getElementById('predict-divisor').innerText = state.divisor;
+
+            openModal('modal-predict');
+        }
+
+        function makePrediction(val) {
+            state.userPrediction = val;
+            showToast(`你預測每人約分到 ${val} 元，讓我們動手操作驗證！`, "info");
+            closeModal('modal-predict');
+        }
+
+        // Apply Custom Problem
+        function applyNewProblem() {
+            const divInput = parseInt(document.getElementById('setting-dividend').value) || 4325;
+            const sorInput = parseInt(document.getElementById('setting-divisor').value) || 3;
+
+            state.dividend = Math.min(Math.max(divInput, 1000), 9999);
+            state.divisor = Math.min(Math.max(sorInput, 2), 6);
+
+            closeModal('modal-settings');
+            handleReset();
+            setTimeout(() => { openModal('modal-predict'); }, 300);
+        }
+
+        // Modal Utilities
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+        function openSettingsModal() { openModal('modal-settings'); }
+
+        // Feedback Toast Notification
+        function showToast(msg, type = "info") {
+            const toast = document.getElementById('toast-message');
+            const toastText = document.getElementById('toast-text');
+
+            toastText.innerText = msg;
+            
+            if (type === 'success') {
+                toast.className = toast.className.replace(/bg-\S+/, 'bg-emerald-800');
+            } else if (type === 'warning') {
+                toast.className = toast.className.replace(/bg-\S+/, 'bg-amber-800');
+            } else {
+                toast.className = toast.className.replace(/bg-\S+/, 'bg-slate-900');
+            }
+
+            toast.classList.remove('hidden');
+            setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+        }
+    </script>
+</body>
+</html>
